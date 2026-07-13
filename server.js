@@ -7,6 +7,17 @@ const port = 3000;
 // server internally, replacing the previous http.createServer() bootstrap.
 const app = express();
 
+// Enforce exact-path routing so that ONLY the two AAP-specified routes ('/' and
+// '/good-evening') are addressable. Express leaves both of these settings
+// disabled by default, which would otherwise expose unrequested case-variant
+// and trailing-slash aliases (e.g. '/GOOD-EVENING', '/good-evening/') that all
+// resolve to the same handler. The AAP contract (§0.5.3) specifies exactly two
+// distinct, individually-addressable routes and §0.6.2 excludes any additional
+// endpoints, so path matching is made case-sensitive and strict about trailing
+// slashes to keep the route surface byte-for-byte exact.
+app.set('case sensitive routing', true);
+app.set('strict routing', true);
+
 // GET / — greeting endpoint (backward compatible with the original server).
 // Returns the exact body 'Hello, World!\n' as text/plain with HTTP 200
 // (200 is Express's default status for res.send()).
