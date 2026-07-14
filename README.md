@@ -1,2 +1,127 @@
 # hao-backprop-test
-test project for backprop integration. Do not touch!
+
+Test project for backprop integration.
+
+This is a Python 3 [Flask](https://flask.palletsprojects.com/) application. For
+every request path, and for each of the eight standard HTTP methods — `GET`,
+`HEAD`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`, and `TRACE` — it returns
+the same fixed response at the application layer: HTTP `200`, header
+`Content-Type: text/plain`, and the body `Hello, World!` followed by a newline,
+served on `http://127.0.0.1:3000/`. This reproduces the application-layer
+behavior of the original Node.js server.
+
+Parity is defined at the application layer, over request paths and the eight
+standard methods listed above. Behavior for method tokens and connection types
+that the HTTP server handles below the application — before a request reaches
+Flask — is outside this guarantee and can differ both from the original Node
+server and between the development server (Werkzeug) and the production servers
+(gunicorn / waitress):
+
+- `CONNECT`: a tunneling method handled at the transport layer rather than as a
+  normal application request.
+- Method tokens that contain lowercase or otherwise malformed characters (for
+  example `get` or `Get`): gunicorn and waitress reject these at their HTTP
+  parser with `400`, as the original Node server did for some tokens.
+  Well-formed uppercase extension tokens (for example `FOO` or `PROPFIND`) are
+  instead accepted by gunicorn and waitress and receive the same `200`
+  response, while the development server (Werkzeug) accepts all of these
+  tokens.
+
+## Setup
+
+Requires Python 3.10 or later (gunicorn 26.0.0 requires Python 3.10+); Python
+3.12 is the target runtime. Create a virtual environment:
+
+```bash
+python -m venv .venv
+```
+
+On Debian and Ubuntu the system Python ships `venv` without the automatic
+`pip` bootstrap, so the command above can fail with an `ensurepip` error and
+leave `.venv` without `pip`. Install the packaging tools first:
+
+```bash
+sudo apt install python3-venv python3-pip
+```
+
+If `python -m venv .venv` still cannot bootstrap `pip` (some minimal or
+hand-built Python builds ship no bundled `pip` wheel), create the environment
+without `pip` and bootstrap it from your existing `pip` instead:
+
+```bash
+python -m venv --without-pip .venv
+python -m pip --python .venv/bin/python install --upgrade pip setuptools wheel
+```
+
+Activate it using the command for your shell:
+
+- macOS / Linux (bash, zsh):
+
+  ```bash
+  source .venv/bin/activate
+  ```
+
+- Windows (cmd.exe):
+
+  ```bat
+  .venv\Scripts\activate.bat
+  ```
+
+- Windows (PowerShell):
+
+  ```powershell
+  .venv\Scripts\Activate.ps1
+  ```
+
+Then install the dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Run
+
+### Development (parity entrypoint)
+
+Mirrors the original `node server.js`. It prints
+`Server running at http://127.0.0.1:3000/` and listens on `127.0.0.1:3000`.
+
+```bash
+python server.py
+```
+
+### Production (UNIX — gunicorn)
+
+Serves the WSGI application exposed as `app` in `wsgi.py`, using the tuning in
+`gunicorn.conf.py`. The `--no-control-socket` flag keeps the process isolated,
+with no gunicorn control socket or management thread:
+
+```bash
+gunicorn --no-control-socket -c gunicorn.conf.py wsgi:app
+```
+
+`gunicorn.conf.py` binds loopback `127.0.0.1:3000` and configures an explicitly
+sized concurrent worker pool — `worker_class = "gthread"` with four workers of
+four threads each. This preserves the "performance not impacted" behavior of the
+original event-driven Node server: gunicorn's default single synchronous worker
+would serialize requests and let one slow or incomplete client block all others,
+whereas threaded workers keep the server responsive under concurrency. The
+worker and thread counts are overridable via the `GUNICORN_WORKERS` (or
+`WEB_CONCURRENCY`) and `GUNICORN_THREADS` environment variables; the response
+contract is identical regardless of the pool size.
+
+### Production (cross-platform — waitress)
+
+```bash
+waitress-serve --listen=127.0.0.1:3000 wsgi:app
+```
+
+## Verify
+
+With the server running, every path and each of the eight standard HTTP methods
+returns the same response:
+
+```bash
+curl http://127.0.0.1:3000/                  # -> Hello, World!
+curl -X POST http://127.0.0.1:3000/any/path  # -> Hello, World!
+```
