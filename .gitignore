@@ -1,0 +1,6 @@
+# Dependencies
+node_modules/
+
+# npm logs / cache
+npm-debug.log*
+.npm

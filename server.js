@@ -1,14 +1,54 @@
-const http = require('http');
+const express = require('express');
 
 const hostname = '127.0.0.1';
 const port = 3000;
 
-const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  res.end('Hello, World!\n');
+// Instantiate the Express application. Express manages the underlying HTTP
+// server internally, replacing the previous http.createServer() bootstrap.
+const app = express();
+
+// Enforce exact-path routing so that ONLY the two AAP-specified routes ('/' and
+// '/good-evening') are addressable. Express leaves both of these settings
+// disabled by default, which would otherwise expose unrequested case-variant
+// and trailing-slash aliases (e.g. '/GOOD-EVENING', '/good-evening/') that all
+// resolve to the same handler. The AAP contract (§0.5.3) specifies exactly two
+// distinct, individually-addressable routes and §0.6.2 excludes any additional
+// endpoints, so path matching is made case-sensitive and strict about trailing
+// slashes to keep the route surface byte-for-byte exact.
+app.set('case sensitive routing', true);
+app.set('strict routing', true);
+
+// GET / — greeting endpoint (backward compatible with the original server).
+// Returns the exact body 'Hello, World!\n' as text/plain with HTTP 200
+// (200 is Express's default status for res.send()).
+app.get('/', (req, res) => {
+  res.type('text/plain').send('Hello, World!\n');
 });
 
-server.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
+// GET /good-evening — second endpoint returning the exact body 'Good evening'
+// as text/plain with HTTP 200.
+app.get('/good-evening', (req, res) => {
+  res.type('text/plain').send('Good evening');
+});
+
+// Start the server, preserving the original 127.0.0.1:3000 binding and the
+// startup log message. Capture the returned server so startup/bind failures can
+// be observed instead of being silently misreported as a successful start.
+const server = app.listen(port, hostname, () => {
+  // Express 5 registers this callback as a one-time 'error' listener in addition
+  // to the 'listening' event, so it is invoked on a failed bind too (with the
+  // socket not actually listening). Announce success only once the socket is
+  // genuinely bound to avoid emitting a false "running" signal.
+  if (server.listening) {
+    console.log(`Server running at http://${hostname}:${port}/`);
+  }
+});
+
+// Report startup/bind errors (e.g. EADDRINUSE when the port is already in use)
+// on stderr and exit with a non-zero status so operators, scripts, health
+// checks, and orchestration receive an accurate failure signal instead of a
+// false success.
+server.on('error', (err) => {
+  console.error(`Failed to start server at http://${hostname}:${port}/: ${err.message}`);
+  process.exit(1);
 });
