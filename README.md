@@ -19,9 +19,13 @@ server and between the development server (Werkzeug) and the production servers
 
 - `CONNECT`: a tunneling method handled at the transport layer rather than as a
   normal application request.
-- Malformed, lowercase, or otherwise non-standard method tokens (for example
-  `get` or `FOO`): gunicorn and waitress reject these at their HTTP parser, and
-  the original Node server answered some of them with `400`.
+- Method tokens that contain lowercase or otherwise malformed characters (for
+  example `get` or `Get`): gunicorn and waitress reject these at their HTTP
+  parser with `400`, as the original Node server did for some tokens.
+  Well-formed uppercase extension tokens (for example `FOO` or `PROPFIND`) are
+  instead accepted by gunicorn and waitress and receive the same `200`
+  response, while the development server (Werkzeug) accepts all of these
+  tokens.
 
 ## Setup
 
@@ -30,6 +34,23 @@ Requires Python 3.10 or later (gunicorn 26.0.0 requires Python 3.10+); Python
 
 ```bash
 python -m venv .venv
+```
+
+On Debian and Ubuntu the system Python ships `venv` without the automatic
+`pip` bootstrap, so the command above can fail with an `ensurepip` error and
+leave `.venv` without `pip`. Install the packaging tools first:
+
+```bash
+sudo apt install python3-venv python3-pip
+```
+
+If `python -m venv .venv` still cannot bootstrap `pip` (some minimal or
+hand-built Python builds ship no bundled `pip` wheel), create the environment
+without `pip` and bootstrap it from your existing `pip` instead:
+
+```bash
+python -m venv --without-pip .venv
+python -m pip --python .venv/bin/python install --upgrade pip setuptools wheel
 ```
 
 Activate it using the command for your shell:
