@@ -1,59 +1,38 @@
 """Catch-all route: the Flask reproduction of the Node.js universal handler.
 
-This module ports the single request-handling flow of the original Node.js
-server (``server.js`` L6-L10) to Flask, preserving its observable behavior
-**byte-for-byte**. The original ``http.createServer`` callback ran for *every*
-request and ignored the request object entirely, always replying with::
+The source ``http.createServer`` callback (server.js L6-L10) ran for every
+request, ignored it entirely, and always replied 200 / ``text/plain`` /
+``Hello, World!\n``. This module reproduces that contract on Flask.
 
-    HTTP/1.1 200 OK
-    Content-Type: text/plain
-    Content-Length: 14
+Method coverage & parity scope (accurate as of this implementation):
 
-    Hello, World!\\n
-
-To reproduce that "one response for everything" contract on top of Flask's
-route-matching engine, this module registers a pair of *catch-all* rules on the
-``main`` blueprint (see :mod:`app.main`). Together they match every path, and
-the explicit ``methods`` list makes them match every HTTP method, so Flask never
-produces a ``404`` (no matching route), ``405`` (method not allowed), or ``308``
-(trailing-slash redirect) -- none of which the Node server ever emitted.
-
-Design notes / parity rationale:
-
-* **Configuration, not literals.** The response body and ``Content-Type`` are
-  read from ``current_app.config`` (keys ``RESPONSE_BODY`` and ``CONTENT_TYPE``,
-  populated by ``create_app()`` via ``app.config.from_object(Config)`` from
-  :mod:`app.config`). This keeps every ported constant traceable to a single
-  source of truth. The HTTP status ``200`` is passed as a literal because it is
-  a universal HTTP constant, mirroring the source, which set ``res.statusCode``
-  inline in the callback.
-* **``content_type=`` (not ``mimetype=``).** The response is constructed with
-  the ``content_type`` argument so the header is emitted *verbatim* as
-  ``text/plain``. Flask's ``mimetype`` argument would cause Werkzeug to append
-  ``; charset=utf-8`` for text mimetypes -- something the Node server never sent
-  and which would break byte-for-byte parity.
-* **The request is ignored.** Like the source callback that never inspected
-  ``req``, the view reads nothing from the incoming request (no body, query
-  string, or headers) and branches on nothing; the response is unconditional.
-
-Import graph (AAP 0.4.2)::
-
-    app/main/__init__.py --(deferred import)-->     app/main/routes.py
-    app/main/routes.py    --imports-->              main_bp (from app.main)
-    app/main/routes.py    --reads at request time-->  current_app.config (app.config)
+* The two catch-all rules bind the eight standard methods in ``METHODS`` (GET,
+  HEAD, POST, PUT, DELETE, PATCH, OPTIONS, TRACE); those reach ``catch_all``
+  directly.
+* Any OTHER method the WSGI server forwards -- extension methods (e.g.
+  PROPFIND, M-SEARCH), the CONNECT method, or non-standard tokens -- does not
+  match the bound method set, so Werkzeug raises 405 and ``catch_all_errors``
+  maps it back to the same 200 response. An unmatched path (404) is handled the
+  same way. These fallbacks are what make the response universal; the explicit
+  list alone does not cover "every HTTP method". This is the AAP 0.6
+  belt-and-suspenders design and yields the "one response for every path and
+  every method" contract (AAP 0.1.1).
+* This intentionally does NOT reproduce Node's transport/parser-level edge
+  behavior -- e.g. llhttp answering an unknown method token with 400, or an
+  unhandled CONNECT being closed via a separate socket event. Those live below
+  the WSGI boundary, are not portably expressible in a Flask/WSGI app, and
+  would contradict the AAP's universal-response contract (AAP 0.1.1); they fall
+  outside the AAP 0.6 parity scope, which was defined over paths and the eight
+  standard methods.
 """
 
-from flask import Response, current_app
+from flask import Response, current_app, request
 
 from app.main import main_bp
 
-# Every standard HTTP method is listed explicitly so that the catch-all rules
-# accept them all and Werkzeug never raises ``405 Method Not Allowed``. This
-# mirrors the Node server, whose single callback fired regardless of method.
-#   * ``HEAD`` is auto-derived from ``GET`` by Werkzeug (the body is stripped
-#     per the HTTP spec); listing it explicitly is harmless and documents intent.
-#   * ``OPTIONS`` and ``TRACE`` are included so those methods reach this handler
-#     too, rather than being intercepted by any framework default.
+# Standard methods bound explicitly so they reach the handler directly. Methods
+# outside this list still return the identical response via the 404/405
+# fallback below (see the module docstring's "Method coverage" note).
 METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'TRACE']
 
 
@@ -62,28 +41,16 @@ METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'TRACE']
 @main_bp.route('/<path:path>', methods=METHODS,
                strict_slashes=False, provide_automatic_options=False)
 def catch_all(path):
-    """Return the fixed response for *any* path and *any* HTTP method.
+    """Return the fixed 200 / ``text/plain`` / ``Hello, World!\n`` for any request.
 
-    Two rules are stacked on this single view function so that both the
-    application root (``/``) and every sub-path (including slash-containing
-    paths such as ``/any/random/path``) resolve here:
-
-    * The root rule supplies ``defaults={'path': ''}`` so this view's required
-      ``path`` parameter is satisfied when serving ``/``.
-    * The sub-path rule uses the ``<path:path>`` converter which -- unlike the
-      default string converter -- matches segments that contain slashes.
-
-    Both rules set:
-
-    * ``strict_slashes=False`` -- disables Werkzeug's automatic ``308`` redirect
-      for trailing slashes (e.g. ``/foo/`` -> ``/foo``); the Node server never
-      issued such redirects.
-    * ``provide_automatic_options=False`` -- stops Flask from short-circuiting
-      ``OPTIONS`` requests with an automatic ``Allow``-header response, so this
-      handler runs for ``OPTIONS`` and returns the identical body, matching Node.
-
-    The ``path`` argument is intentionally unused: the response is unconditional,
-    faithfully reproducing the source callback that ignored ``req`` entirely.
+    Rule flags (parity-critical): ``defaults={'path': ''}`` lets the root reuse
+    this view; ``<path:path>`` matches slash-containing paths; and
+    ``strict_slashes=False`` disables Werkzeug's 308 trailing-slash redirects
+    (Node issued none). ``provide_automatic_options=False`` lets OPTIONS reach
+    this view instead of Flask's automatic ``Allow`` response, so OPTIONS
+    returns the identical body. ``content_type=`` sets the header verbatim
+    (``mimetype=`` would append ``; charset=utf-8``). ``path`` is unused: the
+    response is unconditional, mirroring the source callback ignoring ``req``.
     """
     return Response(
         current_app.config['RESPONSE_BODY'],
@@ -95,20 +62,30 @@ def catch_all(path):
 @main_bp.app_errorhandler(404)
 @main_bp.app_errorhandler(405)
 def catch_all_errors(error):
-    """Defensive fallback so that no ``404``/``405`` can ever escape.
+    """Map any 404/405 to the identical 200 response (AAP 0.6 fallback).
 
-    The catch-all rules above already make ``404`` (no matching route) and
-    ``405`` (method not allowed) unreachable in normal operation. These
-    application-wide handlers -- registered via the blueprint -- are a
-    belt-and-suspenders guarantee (endorsed by AAP 0.6): should any request ever
-    fail to match, it still receives the exact same ``200`` / ``text/plain`` /
-    ``Hello, World!\\n`` response, preserving parity with the Node server.
-
-    The ``error`` argument (the raised ``HTTPException``) is intentionally
-    unused; the response is unconditional.
+    This is the mechanism by which methods outside ``METHODS`` (extension
+    methods, CONNECT, non-standard tokens) and any unmatched path still receive
+    the universal response. The ``error`` argument is intentionally unused.
     """
     return Response(
         current_app.config['RESPONSE_BODY'],
         status=200,
         content_type=current_app.config['CONTENT_TYPE'],
     )
+
+
+@main_bp.after_app_request
+def omit_content_length_on_head(response):
+    """Match the Node server's HEAD response, which omits ``Content-Length``.
+
+    Werkzeug derives HEAD from GET and would emit ``Content-Length: 14``; the
+    Node source sends none. Popping the header is not sufficient -- Werkzeug
+    re-adds it at WSGI emission unless ``automatically_set_content_length`` is
+    also disabled. Status 200, the exact ``text/plain`` Content-Type, and the
+    empty HEAD body are left unchanged.
+    """
+    if request.method == 'HEAD':
+        response.headers.pop('Content-Length', None)
+        response.automatically_set_content_length = False
+    return response

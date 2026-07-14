@@ -1,37 +1,18 @@
 """The ``main`` blueprint: the application's sole request-handling flow.
 
-This module is pure modular scaffolding for the Flask rewrite of the original
-Node.js server. It defines the :class:`~flask.Blueprint` object that carries
-the application's single, universal request-handling flow and, at the bottom of
-the module, performs a deferred import of the routes module so that importing
-``main_bp`` also registers the catch-all route on the blueprint.
-
-The deferred import at the end of the file breaks the circular dependency
-between this module (which defines ``main_bp``) and :mod:`app.main.routes`
-(which imports ``main_bp`` from here). The parent application factory in
-``app/__init__.py`` consumes this module via ``from app.main import main_bp``
-followed by ``app.register_blueprint(main_bp)``.
-
-This file intentionally contains no request-handling logic, routes, error
-handlers, or configuration; those responsibilities live in
-:mod:`app.main.routes` and :mod:`app.config` respectively.
+Defines the blueprint object and, at the bottom of the module, performs a
+deferred import of the routes module so that importing ``main_bp`` also
+registers the catch-all route. The name ``'main'`` and the variable ``main_bp``
+are the public contract the application factory relies on.
 """
 
 from flask import Blueprint
 
-# The ``main`` blueprint encapsulates the application's sole request-handling
-# flow. The name string ``'main'`` and the variable name ``main_bp`` form the
-# public contract relied upon by the parent application factory; neither may be
-# renamed. No ``url_prefix`` is supplied so the catch-all route registered in
-# ``app.main.routes`` matches every path from the application root.
 main_bp = Blueprint('main', __name__)
 
-# Deferred (bottom-of-module) import performed for its side effect: importing
-# ``app.main.routes`` registers the catch-all route on ``main_bp`` above. It is
-# placed here -- after ``main_bp`` is defined -- to break the circular import
-# between this module and ``app.main.routes`` (which imports ``main_bp`` from
-# this module). Importing it at the top of the file would raise an ImportError.
-# ``# noqa: E402,F401`` suppresses the expected "module level import not at top
-# of file" (E402) and "imported but unused" (F401) lint warnings; the import is
-# intentional and its side effect (route registration) is the reason it exists.
+# Deferred (bottom-of-module) import, run for its side effect: importing
+# ``app.main.routes`` registers the catch-all route on ``main_bp``. It must come
+# after ``main_bp`` is defined -- importing at the top would create a circular
+# import, since routes.py imports ``main_bp`` from here. ``# noqa: E402,F401``
+# suppresses the resulting (expected) "import not at top" / "unused" warnings.
 from app.main import routes  # noqa: E402,F401
