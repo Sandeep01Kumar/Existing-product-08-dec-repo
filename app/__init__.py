@@ -20,18 +20,17 @@ def create_app():
     Returns a fully-configured :class:`flask.Flask` instance, safe to run via
     ``server.py`` (development/parity) or serve as ``wsgi:app`` (production).
     """
-    app = Flask(__name__)
-
-    # Flask(__name__) auto-registers a '/static/<path:filename>' route. The
-    # source serves no static assets and returns the SAME response for EVERY
-    # path, so that route is removed before the blueprint is registered -- the
-    # catch-all then handles '/static/...' too. This matters for parity beyond
-    # 404s: the default static route would answer 'OPTIONS /static/...' with
-    # Flask's automatic (empty) response instead of the universal body. Werkzeug
-    # exposes no rule-removal API, so we swap in a fresh url_map (same config)
-    # and drop the orphaned 'static' view -- both public-API operations.
-    app.url_map = app.url_map_class(host_matching=app.url_map.host_matching)
-    app.view_functions.pop('static', None)
+    # static_folder=None disables Flask's automatic '/static/<path:filename>'
+    # route at construction -- a supported Flask constructor option, so no
+    # manual URL-map surgery is needed. The source serves no static assets and
+    # returns the SAME response for EVERY path, so the main blueprint's
+    # catch-all must own '/static/...' too; otherwise the default static route
+    # would answer e.g. 'OPTIONS /static/...' with Flask's automatic (empty)
+    # response instead of the universal body. Disabling static at construction
+    # also leaves has_static_folder False and static_folder None (no orphaned
+    # 'static' endpoint), keeping the URL map limited to the blueprint's two
+    # rules.
+    app = Flask(__name__, static_folder=None)
 
     # Copy Config's UPPERCASE attributes (HOST, PORT, RESPONSE_BODY,
     # CONTENT_TYPE) into app.config for the route handler to read at request time.
