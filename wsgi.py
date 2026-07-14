@@ -5,7 +5,7 @@ This module exposes the WSGI application callable under the well-known name
 
 * gunicorn (UNIX, primary)::
 
-      gunicorn --no-control-socket --bind 127.0.0.1:3000 wsgi:app
+      gunicorn --no-control-socket -c gunicorn.conf.py wsgi:app
 
 * waitress (cross-platform alternative)::
 
@@ -16,6 +16,16 @@ Both bind the same ``127.0.0.1:3000`` interface as the source Node server
 "performance not impacted" requirement of user rule "Ajit_New Product" by
 serving the app through a production WSGI server rather than Flask's
 development server.
+
+The gunicorn command loads :mod:`gunicorn.conf.py`, which binds
+``127.0.0.1:3000`` and configures an explicitly sized concurrent worker pool
+(``worker_class = "gthread"``, four workers of four threads each). This is what
+keeps performance on par with the event-driven Node original: gunicorn's default
+single synchronous worker would serialize requests and let one slow/incomplete
+client block every other client, whereas threaded workers stay responsive under
+concurrency. Worker/thread sizing is a transport-layer concern below the
+application boundary and does not change a single response byte. waitress serves
+the same callable through its own built-in thread pool.
 
 ``--no-control-socket`` is required on the gunicorn command. gunicorn 26
 otherwise opens a Unix control socket (default ``$HOME/.gunicorn/gunicorn.ctl``)

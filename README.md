@@ -92,13 +92,23 @@ python server.py
 
 ### Production (UNIX — gunicorn)
 
-Serves the WSGI application exposed as `app` in `wsgi.py`. The
-`--no-control-socket` flag keeps the process isolated, with no gunicorn control
-socket or management thread:
+Serves the WSGI application exposed as `app` in `wsgi.py`, using the tuning in
+`gunicorn.conf.py`. The `--no-control-socket` flag keeps the process isolated,
+with no gunicorn control socket or management thread:
 
 ```bash
-gunicorn --no-control-socket --bind 127.0.0.1:3000 wsgi:app
+gunicorn --no-control-socket -c gunicorn.conf.py wsgi:app
 ```
+
+`gunicorn.conf.py` binds loopback `127.0.0.1:3000` and configures an explicitly
+sized concurrent worker pool — `worker_class = "gthread"` with four workers of
+four threads each. This preserves the "performance not impacted" behavior of the
+original event-driven Node server: gunicorn's default single synchronous worker
+would serialize requests and let one slow or incomplete client block all others,
+whereas threaded workers keep the server responsive under concurrency. The
+worker and thread counts are overridable via the `GUNICORN_WORKERS` (or
+`WEB_CONCURRENCY`) and `GUNICORN_THREADS` environment variables; the response
+contract is identical regardless of the pool size.
 
 ### Production (cross-platform — waitress)
 
