@@ -22,6 +22,26 @@ app = Flask(__name__, static_folder=None)
 # enumerating it here would create a *new* divergence instead of parity.
 METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD', 'TRACE']
 
+# --- Bounded HTTP-parser parity residuals (AAP 0.6; NO code required) ---
+# Node's original does no request validation in application code: its 400s
+# for malformed requests come from the runtime HTTP parser (llhttp), not
+# server.js. Werkzeug's dev-server parser diverges from llhttp on a few
+# NON-CONFORMING inputs: a raw non-ASCII request target or a missing Host on
+# HTTP/1.1 reach the catch-all (200 here) where Node answers 400; and a
+# garbage request line, a bogus HTTP version, or an over-long URI are
+# rejected by http.server with its own generic 400/414/505 page BEFORE WSGI
+# dispatch (leaking nothing -- with debug=False there is no traceback/PIN/
+# path) instead of reaching routing. These are framework/runtime differences,
+# not app behavior, and are unreachable by conforming clients -- every
+# conforming request stays exact byte-for-byte parity with Node (the AAP
+# "no 404/500 page" guarantee holds at the application layer: everything that
+# reaches routing returns the constant 200 Hello). Per AAP 0.7.1 ("no error
+# handling may be added") and this module's spec ("Do NOT add error handlers/
+# 404/500 pages"), the residuals are accepted as-is: adding a request-
+# validator or error handler to mask them is prohibited (such a handler was
+# reverted as review finding M-1) and could not restore full parity anyway.
+# (CONNECT is a related residual -- see the METHODS note above.)
+
 
 @app.route('/', defaults={'path': ''}, methods=METHODS)
 @app.route('/<path:path>', methods=METHODS)
