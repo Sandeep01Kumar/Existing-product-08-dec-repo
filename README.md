@@ -32,3 +32,21 @@ python app.py
 ```
 
 Once started, the app is reachable at http://127.0.0.1:3000/.
+
+## Notes
+
+`python -m venv` provisions `pip` inside the new environment through the
+standard library's `ensurepip`. Some minimal or CI base images ship Python
+without that bundle, so `python -m venv venv` can fail at the `ensurepip`
+step. If that happens, either install your platform's `python3-venv` and
+`python3-pip` packages and retry, or create the environment without `pip` and
+bootstrap it before installing dependencies:
+
+```bash
+python -m venv --without-pip venv
+source venv/bin/activate
+curl -fsSL https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+python get-pip.py
+pip install -r requirements.txt
+python app.py
+```
