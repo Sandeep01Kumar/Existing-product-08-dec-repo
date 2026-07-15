@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hello_world"
+version = "1.0.0"
+description = "Hello world in Python (Flask)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "hxu" }]
+dependencies = ["Flask==3.1.3"]
