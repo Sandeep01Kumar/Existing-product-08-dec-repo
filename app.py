@@ -23,32 +23,15 @@ app = Flask(__name__, static_folder=None)
 METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD', 'TRACE']
 
 
-def _hello_response():
-    """Build the single, constant HTTP response this app ever returns.
-
-    Reused by both the catch-all view and the 404 handler so the two response
-    sites can never drift. content_type (not mimetype) avoids an appended
-    '; charset=utf-8', preserving the exact header and the 14-byte body
-    (incl. the trailing '\n').
-    """
-    return Response('Hello, World!\n', status=200, content_type='text/plain')
-
-
 @app.route('/', defaults={'path': ''}, methods=METHODS)
 @app.route('/<path:path>', methods=METHODS)
 def catch_all(path):
-    return _hello_response()
-
-
-@app.errorhandler(404)
-def catch_all_404(error):
-    # Werkzeug's URL router rejects a decoded newline in the path (e.g. %0a or
-    # %0d%0a) with a 404 *before* the catch-all view runs. Node's path-agnostic
-    # handler ignores the path entirely and still answers 200, so we convert
-    # that 404 back into the identical constant response. This preserves
-    # byte-for-byte parity and honours the contract that no 404/500 page
-    # is ever produced (AAP behavioral-parity requirement).
-    return _hello_response()
+    # The single, constant response this app ever returns, mirroring Node's
+    # res.end('Hello, World!\n'). content_type (not mimetype) avoids an
+    # appended '; charset=utf-8', preserving the exact header and the 14-byte
+    # body (incl. the trailing '\n'). The path arg is accepted and ignored,
+    # mirroring Node's request-agnostic single handler.
+    return Response('Hello, World!\n', status=200, content_type='text/plain')
 
 
 if __name__ == '__main__':
