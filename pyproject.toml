@@ -1,0 +1,24 @@
+# pyproject.toml - Python project metadata for the Flask port of the original Node.js server.
+#
+# This file replaces the decommissioned npm manifests (package.json / package-lock.json),
+# carrying over the original project's metadata (name, version, author, license) so the
+# standalone Python project can be identified, built, and installed with pip.
+#
+# The application is a single-file Flask app: run it directly with `python app.py`
+# (it binds 127.0.0.1:3000 and serves a constant `Hello, World!\n` response). There is
+# intentionally no console-script entry point - the entry point is the top-level `app.py`
+# guarded by `if __name__ == '__main__':`, mirroring `node server.js` in the original.
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hello_world"
+version = "1.0.0"
+description = "Hello world in Python (Flask)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "hxu" }]
+dependencies = ["Flask==3.1.3"]
