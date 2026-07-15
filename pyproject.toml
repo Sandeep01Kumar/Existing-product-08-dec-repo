@@ -10,7 +10,7 @@
 # guarded by `if __name__ == '__main__':`, mirroring `node server.js` in the original.
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -19,6 +19,12 @@ version = "1.0.0"
 description = "Hello world in Python (Flask)"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "hxu" }]
 dependencies = ["Flask==3.1.3"]
+
+[tool.setuptools]
+# Package exactly the top-level `app.py` module. Without this, setuptools
+# flat-layout auto-discovery selects unrelated empty directories as namespace
+# packages and omits the application module from the built/installed artifact.
+py-modules = ["app"]
